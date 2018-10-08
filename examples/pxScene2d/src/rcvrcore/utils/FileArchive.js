@@ -18,7 +18,7 @@ limitations under the License.
 
 "use strict";
 
-var isDuk = (typeof timers != "undefined")?true:false;
+var isDuk = (typeof Duktape != "undefined")?true:false;
 
 var fs = require('fs');
 var url = require('url');

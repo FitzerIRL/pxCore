@@ -26,6 +26,7 @@
 #ifdef ENABLE_HTTP_CACHE
 #include <rtFileCache.h>
 #endif
+#include "rtCORS.h"
 
 // TODO Eliminate std::string
 #include <string.h>
@@ -60,7 +61,7 @@ public:
   long httpStatusCode();
   void setHttpStatusCode(long statusCode);
   bool executeCallback(int statusCode);
-  bool executeDownloadProgressCallback(void *ptr, size_t size, size_t nmemb);
+  size_t executeDownloadProgressCallback(void *ptr, size_t size, size_t nmemb);
   void setDownloadedData(char* data, size_t size);
   void downloadedData(char*& data, size_t& size);
   char* downloadedData();
@@ -76,29 +77,37 @@ public:
   void setCallbackData(void* callbackData);
   void setHeaderOnly(bool val);
   bool headerOnly();
-  void setDownloadHandleExpiresTime(int timeInSeconds);
-  int downloadHandleExpiresTime();
+  void setDownloadHandleExpiresTime(double timeInSeconds);
+  double downloadHandleExpiresTime();
 #ifdef ENABLE_HTTP_CACHE
   void setCacheEnabled(bool val);
   bool cacheEnabled();
   void setDataIsCached(bool val);
   bool isDataCached();
+  size_t getCachedFileReadSize(void);
+  void setCachedFileReadSize(size_t cachedFileReadSize);
   void setDeferCacheRead(bool val);
   bool deferCacheRead();
   FILE* cacheFilePointer(void);
 #endif //ENABLE_HTTP_CACHE
   void setProgressMeter(bool val);
   bool isProgressMeterSwitchOff();
+  void setUseCallbackDataSize(bool val);
+  bool useCallbackDataSize();
   void setHTTPFailOnError(bool val);
   bool isHTTPFailOnError();
   void setHTTPError(const char* httpError);
   char* httpErrorBuffer(void);
   void setCurlDefaultTimeout(bool val);
   bool isCurlDefaultTimeoutSet();
-  void setOrigin(const char* origin);
-  rtString origin();
+  void setCORS(const rtCORSRef& cors);
+  rtCORSRef cors() const;
   void cancelRequest();
   bool isCanceled();
+  void setMethod(const char* method);
+  rtString method() const;
+  void setReadData(const rtString& val);
+  rtString readData() const;
 
 private:
   rtString mFileUrl;
@@ -117,27 +126,31 @@ private:
   size_t mHeaderDataSize;
   std::vector<rtString> mAdditionalHttpHeaders;
   bool mHeaderOnly;
-  int mDownloadHandleExpiresTime;
+  double mDownloadHandleExpiresTime;
 #ifdef ENABLE_HTTP_CACHE
   bool mCacheEnabled;
   bool mIsDataInCache;
   bool mDeferCacheRead;
+  size_t mCachedFileReadSize;
 #endif //ENABLE_HTTP_CACHE
   bool mIsProgressMeterSwitchOff;
   bool mHTTPFailOnError;
   char mHttpErrorBuffer[CURL_ERROR_SIZE];
   bool mDefaultTimeout;
-  rtString mOrigin;
+  rtCORSRef mCORS;
   bool mCanceled;
+  bool mUseCallbackDataSize;
   rtMutex mCanceledMutex;
+  rtString mMethod;
+  rtString mReadData;
 };
 
 struct rtFileDownloadHandle
 {
   rtFileDownloadHandle(CURL* handle) : curlHandle(handle), expiresTime(-1) {}
-  rtFileDownloadHandle(CURL* handle, int time) : curlHandle(handle), expiresTime(time) {}
+  rtFileDownloadHandle(CURL* handle, double time) : curlHandle(handle), expiresTime(time) {}
   CURL* curlHandle;
-  int expiresTime;
+  double expiresTime;
 };
 
 class rtFileDownloader
@@ -171,7 +184,7 @@ private:
     bool checkAndDownloadFromCache(rtFileDownloadRequest* downloadRequest,rtHttpCacheData& cachedData);
 #endif
     CURL* retrieveDownloadHandle();
-    void releaseDownloadHandle(CURL* curlHandle, int expiresTime);
+    void releaseDownloadHandle(CURL* curlHandle, double expiresTime);
     static void addFileDownloadRequest(rtFileDownloadRequest* downloadRequest);
     static void clearFileDownloadRequest(rtFileDownloadRequest* downloadRequest);
     //todo: hash mPendingDownloadRequests;

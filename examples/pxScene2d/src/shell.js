@@ -17,32 +17,56 @@ limitations under the License.
 */
 
 var isDuk=(typeof Duktape != "undefined")?true:false;
+var isV8 = (typeof _isV8 != "undefined")?true:false;
 
 px.import({ scene: 'px:scene.1.js',
-             keys: 'px:tools.keys.js'
+             keys: 'px:tools.keys.js',
 }).then( function ready(imports)
 {
   var scene = imports.scene;
   var keys  = imports.keys;
 
   function uncaughtException(err) {
-    if (!isDuk) {
+    if (!isDuk && !isV8) {
       console.log("Received uncaught exception " + err.stack);
     }
   }
   function unhandledRejection(err) {
-    if (!isDuk) {
+    if (!isDuk && !isV8) {
       console.log("Received uncaught rejection.... " + err);
     }
   }
-  if (!isDuk) {
+  if (!isDuk && !isV8) {
     process.on('uncaughtException', uncaughtException);
     process.on('unhandledRejection', unhandledRejection);
   }
 
 
+  /**
+   * This is helper method which resolves resource URL for scene
+   * - it resolves various shortcuts using prepareUrl() method
+   * also
+   * - for .js files it returns URL as it is
+   * - for other files (MIME files) it returns the URL of wrapper scene which
+   *   will draw provided URL with the mimeRenderer
+   *
+   * @param {String} url url
+   *
+   * @returns {String} URL for a scene
+   */
+  function resolveSceneUrl(url) {
+    if (url && url.toLowerCase().indexOf('.js?') > 0) { // this is a js file with query params
+      return url;
+    }
+    if (url && !url.match(/\.js$/)) {
+      url = 'mimeScene.js?url=' + url;
+    }
+    return url;
+  }
+  
   // JRJR TODO had to add more modules
   var url = queryStringModule.parse(urlModule.parse(module.appSceneContext.packageUrl).query).url;
+  url = resolveSceneUrl(url)
   var originalURL = (!url || url==="") ? "browser.js":url;
   console.log("url:",originalURL);
 
@@ -133,7 +157,7 @@ if (false)
       else
       if (code == keys.S)  // ctrl-alt-s
       {
-        if (!isDuk) {
+        if (!isDuk && !isV8) {
         // This returns a data URI string with the image data
         var dataURI = scene.screenshot('image/png;base64');
 
@@ -298,9 +322,9 @@ if (false)
   */
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   function releaseResources() {
-    if (!isDuk) {
-      process.removeListener("uncaughtException", uncaughtException);
-      process.removeListener("unhandledRejection", unhandledRejection);
+    if (!isDuk && !isV8) {
+        process.removeListener("uncaughtException", uncaughtException);
+        process.removeListener("unhandledRejection", unhandledRejection);
     }
   }
 

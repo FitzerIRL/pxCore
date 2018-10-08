@@ -154,12 +154,20 @@ rtError pxImage::setUrl(const char* s)
   }
 
   removeResourceListener();
-  
-  mResource = pxImageManager::getImage(s, NULL, pRes ? pRes->initW() : 0,
-                                                pRes ? pRes->initH() : 0 );
 
-  if(mInitialized && !imageLoaded && pRes && pRes->getUrl().length() > 0)
+  if(pRes && !imageLoaded)
   {
+    mResource = pxImageManager::getImage(s, NULL, mScene ? mScene->cors() : NULL,
+                                                  pRes->initW(),  pRes->initH(),
+                                                  pRes->initSX(), pRes->initSY(), mScene ? mScene->getArchive() : NULL );
+  }
+  else
+  {
+    mResource = pxImageManager::getImage(s, NULL, mScene ? mScene->cors() : NULL, 0, 0, 1.0f, 1.0f, mScene ? mScene->getArchive() : NULL);
+  }
+
+  if(getImageResource() != NULL && getImageResource()->getUrl().length() > 0 && mInitialized && !imageLoaded)
+{
     mListenerAdded = true;
     pRes->addListener(this);
   }
@@ -351,6 +359,17 @@ void pxImage::reloadData(bool sceneSuspended)
     getImageResource()->reloadData();
   }
   pxObject::reloadData(sceneSuspended);
+}
+
+uint64_t pxImage::textureMemoryUsage()
+{
+  uint64_t textureMemory = 0;
+  if (getImageResource())
+  {
+    textureMemory += getImageResource()->textureMemoryUsage();
+  }
+  textureMemory += pxObject::textureMemoryUsage();
+  return textureMemory;
 }
 
 rtDefineObject(pxImage,pxObject);
