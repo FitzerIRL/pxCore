@@ -97,9 +97,9 @@ rtError pxImageA::setUrl(const char *s)
 }
 
 // animation happens here
-void pxImageA::update(double t)
+void pxImageA::update(double t, double dt /*= 0*/)
 {
-  pxObject::update(t);
+  pxObject::update(t, dt);
 
   if (getImageAResource() == NULL || !mImageLoaded)
   {

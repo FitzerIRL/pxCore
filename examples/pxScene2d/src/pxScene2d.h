@@ -163,6 +163,14 @@ public:
   rtProperty(y, y, setY, float);
   rtProperty(w, w, setW, float);
   rtProperty(h, h, setH, float);
+  
+  // PHYSICS
+  rtProperty(vx, vx, setVX, float); // ## HUGH
+  rtProperty(vy, vy, setVY, float); // ## HUGH
+  rtProperty(ax, ax, setAX, float); // ## HUGH
+  rtProperty(ay, ay, setAY, float); // ## HUGH
+  //
+  
   rtProperty(px, px, setPX, float);
   rtProperty(py, py, setPY, float);
   rtProperty(cx, cx, setCX, float);
@@ -318,6 +326,34 @@ public:
   float h()             const { return mh; }
   rtError h(float& v)   const { v = mh; return RT_OK;   }
   virtual rtError setH(float v)       { cancelAnimation("h"); mh = v; return RT_OK;   }
+
+  //
+  //
+  //
+  rtError phyCallback(rtFunctionRef& v) const;
+  rtError setPhyCallback(const rtFunctionRef& v);
+  
+  rtProperty(phyCallback, phyCallback, setPhyCallback, rtFunctionRef);
+
+  float vx()             const { return mVx; }
+  rtError vx(float& v)   const {     v = mVx; return RT_OK;   }
+  virtual rtError setVX(float v) { mVx = v; mHavePHY = true; return RT_OK;   }
+  
+  float vy()             const { return mVy; }
+  rtError vy(float& v)   const {    v = mVy; return RT_OK;   }
+  virtual rtError setVY(float v) { mVy = v; mHavePHY = true; return RT_OK;   }
+  
+  float ax()             const { return mAx; }
+  rtError ax(float& v)   const {     v = mAx; return RT_OK;   }
+  virtual rtError setAX(float v) { mAx = v;   mHavePHY = true; return RT_OK;   }
+
+  float ay()             const { return mAy; }
+  rtError ay(float& v)   const {    v = mAy; return RT_OK;   }
+  virtual rtError setAY(float v) { mAy = v;  mHavePHY = true; return RT_OK;   }
+  //
+  //
+  //
+
   float px()            const { return mpx;}
   rtError px(float& v)  const { v = mpx; return RT_OK;  }
   rtError setPX(float v)      { cancelAnimation("px"); mpx = (v > 1) ? 1 : (v < 0) ? 0 : v; return RT_OK;  }
@@ -440,7 +476,7 @@ public:
     //return RT_OK;
   //}
 
-  virtual void update(double t);
+  virtual void update(double t, double dt = 0.0f);
   virtual void releaseData(bool sceneSuspended);
   virtual void reloadData(bool sceneSuspended);
   virtual uint64_t textureMemoryUsage();
@@ -732,6 +768,12 @@ protected:
   float mrx, mry, mrz;
 #endif // ANIMATION_ROTATE_XYZ
   float msx, msy, mw, mh;
+
+  bool  mHavePHY;
+  float mVx, mVy, mAx, mAy;
+  
+  rtFunctionRef mPhyCallback;
+  
   bool mInteractive;
   pxContextFramebufferRef mSnapshotRef;
   bool mPainting;
@@ -1009,11 +1051,11 @@ public:
     return RT_OK;
   }
 
-  virtual void update(double t)
+  virtual void update(double t, double dt = 0.0f)
   {
     if (mView)
       mView->onUpdate(t);
-    pxObject::update(t);
+    pxObject::update(t, dt);
   }
 
   virtual void draw() 
@@ -1712,6 +1754,8 @@ private:
   int frameCount;
   int mWidth;
   int mHeight;
+
+  double last_t;
 
   rtEmitRef mEmit;
 

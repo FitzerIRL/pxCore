@@ -457,6 +457,10 @@ pxObject::pxObject(pxScene2d* scene): rtObject(), mParent(NULL), mpx(0), mpy(0),
     mrx(0), mry(0), mrz(1.0),
 #endif //ANIMATION_ROTATE_XYZ
     msx(1), msy(1), mw(0), mh(0),
+
+    mHavePHY(false),
+    mVx(0), mVy(0), mAx(0), mAy(0), mPhyCallback(NULL),
+
     mInteractive(true),
     mSnapshotRef(), mPainting(true), mClip(false), mMask(false), mDraw(true), mHitTest(true), mReady(),
     mFocus(false),mClipSnapshotRef(),mCancelInSet(true),mUseMatrix(false), mRepaint(true)
@@ -962,7 +966,7 @@ void pxObject::animateToInternal(const char* prop, double to, double duration,
   }
 }
 
-void pxObject::update(double t)
+void pxObject::update(double t, double dt /* 0 */)
 {
 #ifdef DEBUG_SKIP_UPDATE
 #warning " 'DEBUG_SKIP_UPDATE' is Enabled"
@@ -1097,7 +1101,6 @@ void pxObject::update(double t)
         it = mAnimations.erase(it);
         continue;
       }
-
     }
 
     float v = static_cast<float> (from + (to - from) * d);
@@ -1110,7 +1113,35 @@ void pxObject::update(double t)
       animObj->update(a.prop, &a, pxConstantsAnimation::STATUS_INPROGRESS);
     }
     ++it;
+  }//WHILE - animations
+
+  ///
+  ///
+  ///
+  if(this->mHavePHY)
+  {
+    if(this->mVx != 0 || this->mAx != 0) // Have X velocity/acceleration ?
+    {
+      this->mx  += (this->mVx * dt);
+      this->mVx += (this->mAx * dt);
   }
+
+    if(this->mVy != 0 || this->mAy != 0) // Have Y velocity/acceleration ?
+    {
+      this->my  += (this->mVy * dt);
+      this->mVy += (this->mAy * dt);
+    }
+    
+    if(mPhyCallback != NULL )
+    {
+      mPhyCallback->Send( 0, NULL, NULL );
+    }
+    
+     mScene->mDirty = true;
+  }
+  ///
+  ///
+  ///
 
     pxMatrix4f m;
     if (gDirtyRectsEnabled) {
@@ -1159,7 +1190,7 @@ void pxObject::update(double t)
       }
 // JR TODO  this lock looks suspicious... why do we need it?
 ENTERSCENELOCK()
-    (*it)->update(t);
+    (*it)->update(t, dt);
 EXITSCENELOCK()
       if (gDirtyRectsEnabled) {
       context.popState();
@@ -1173,6 +1204,20 @@ EXITSCENELOCK()
 
   // Send promise
   sendPromise();
+}
+
+
+rtError pxObject::phyCallback(rtFunctionRef& v) const
+{
+  v = mPhyCallback;
+  return RT_OK;
+}
+
+rtError pxObject::setPhyCallback(const rtFunctionRef& v)
+{
+  mPhyCallback = v;
+  
+  return RT_OK;
 }
 
 void pxObject::releaseData(bool sceneSuspended)
@@ -1820,6 +1865,13 @@ rtDefineProperty(pxObject, x);
 rtDefineProperty(pxObject, y);
 rtDefineProperty(pxObject, w);
 rtDefineProperty(pxObject, h);
+
+rtDefineProperty(pxObject, vx);
+rtDefineProperty(pxObject, vy);
+rtDefineProperty(pxObject, ax);
+rtDefineProperty(pxObject, ay);
+rtDefineProperty(pxObject, phyCallback);
+
 rtDefineProperty(pxObject, px);
 rtDefineProperty(pxObject, py);
 rtDefineProperty(pxObject, cx);
@@ -2738,6 +2790,9 @@ void pxScene2d::onDraw()
 // t is assumed to be monotonically increasing
 void pxScene2d::update(double t)
 {
+  double dt = t - last_t; // SECONDS
+  last_t    = t;          // SECONDS
+
   if (mRoot)
   {
     if (gDirtyRectsEnabled) {
@@ -2749,7 +2804,7 @@ void pxScene2d::update(double t)
       }
 
 #ifndef DEBUG_SKIP_UPDATE
-      mRoot->update(t);
+      mRoot->update(t, dt);
 #else
       UNUSED_PARAM(t);
 #endif

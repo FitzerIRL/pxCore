@@ -49,7 +49,7 @@ public:
 
   virtual ~pxImage();
 
-  virtual void update(double t) { pxObject::update(t);}
+  virtual void update(double t, double dt = 0)  { pxObject::update(t, dt);}
   virtual void onInit();
   virtual void sendPromise();
 

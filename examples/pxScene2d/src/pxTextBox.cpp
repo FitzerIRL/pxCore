@@ -269,9 +269,9 @@ void pxTextBox::draw()
     //getFontResource()->raiseDownloadPriority();
 #endif
 }
-void pxTextBox::update(double t)
+void pxTextBox::update(double t, double dt /*= 0*/)
 {
-  pxText::update(t);	 
+  pxText::update(t, dt);	 
 
   if( mNeedsRecalc ) {
 

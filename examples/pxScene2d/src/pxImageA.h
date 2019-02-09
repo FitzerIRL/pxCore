@@ -63,7 +63,7 @@ public:
     }
   }
 
-  virtual void update(double t);
+  virtual void update(double t, double dt = 0);
   virtual void draw();
   virtual void dispose(bool pumpJavascript);
 

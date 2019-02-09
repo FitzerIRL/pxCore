@@ -240,7 +240,7 @@ public:
   virtual void sendPromise();
   virtual void draw();
   virtual void onInit();
-  virtual void update(double t);
+  virtual void update(double t, double dt = 0);
 
  
   //rtMethodNoArgAndReturn("getFontMetrics", getFontMetrics, rtObjectRef);
