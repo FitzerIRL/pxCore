@@ -1134,7 +1134,8 @@ void pxObject::update(double t, double dt /* 0 */)
     
     if(mPhyCallback != NULL )
     {
-      mPhyCallback->Send( 0, NULL, NULL );
+      rtValue that(this);
+      mPhyCallback->Send( 1, &that, NULL );
     }
     
      mScene->mDirty = true;
