@@ -458,9 +458,6 @@ pxObject::pxObject(pxScene2d* scene): rtObject(), mParent(NULL), mpx(0), mpy(0),
 #endif //ANIMATION_ROTATE_XYZ
     msx(1), msy(1), mw(0), mh(0),
 
-    mHavePHY(false),
-    mVx(0), mVy(0), mAx(0), mAy(0), mPhyCallback(NULL),
-
     mInteractive(true),
     mSnapshotRef(), mPainting(true), mClip(false), mMask(false), mDraw(true), mHitTest(true), mReady(),
     mFocus(false),mClipSnapshotRef(),mCancelInSet(true),mUseMatrix(false), mRepaint(true)
@@ -583,7 +580,7 @@ rtError pxObject::Set(const char* name, const rtValue* value)
       mIsDirty = true;
       //mScreenCoordinates = getBoundingRectInScreenCoordinates();
   }
-    
+
   if (strcmp(name, "x") != 0 && strcmp(name, "y") != 0 &&  strcmp(name, "a") != 0)
   {
     repaint();
@@ -1118,28 +1115,35 @@ void pxObject::update(double t, double dt /* 0 */)
   ///
   ///
   ///
-  if(this->mHavePHY)
-  {
-    if(this->mVx != 0 || this->mAx != 0) // Have X velocity/acceleration ?
-    {
-      this->mx  += (this->mVx * dt);
-      this->mVx += (this->mAx * dt);
-  }
+#ifdef ENABLE_BASIC_PHYSICS
 
-    if(this->mVy != 0 || this->mAy != 0) // Have Y velocity/acceleration ?
+  rtObjectRef phyRef;
+
+  if( this->physics(phyRef) == RT_OK) // Have we PHYSICS to update ?
+  {
+    pxPhysics *phy = (pxPhysics *) phyRef.getPtr();
+
+    if(phy->mVx != 0 || phy->mAx != 0) // Have X velocity/acceleration ?
     {
-      this->my  += (this->mVy * dt);
-      this->mVy += (this->mAy * dt);
+      this->mx += (phy->mVx * dt);
+      phy->mVx += (phy->mAx * dt);
     }
-    
-    if(mPhyCallback != NULL )
+
+    if(phy->mVy != 0 || phy->mAy != 0) // Have Y velocity/acceleration ?
+    {
+      this->my += (phy->mVy * dt);
+      phy->mVy += (phy->mAy * dt);
+    }
+
+    if(phy->mPhyCallback != NULL )
     {
       rtValue that(this);
-      mPhyCallback->Send( 1, &that, NULL );
+      phy->mPhyCallback->Send( 1, &that, NULL );
     }
-    
-     mScene->mDirty = true;
+
+    mScene->mDirty = true;
   }
+#endif // ENABLE_BASIC_PHYSICS
   ///
   ///
   ///
@@ -1205,20 +1209,6 @@ EXITSCENELOCK()
 
   // Send promise
   sendPromise();
-}
-
-
-rtError pxObject::phyCallback(rtFunctionRef& v) const
-{
-  v = mPhyCallback;
-  return RT_OK;
-}
-
-rtError pxObject::setPhyCallback(const rtFunctionRef& v)
-{
-  mPhyCallback = v;
-  
-  return RT_OK;
 }
 
 void pxObject::releaseData(bool sceneSuspended)
@@ -1462,7 +1452,7 @@ void pxObject::drawInternal(bool maskPass)
     //rtLogInfo("pxObject::drawInternal returning because object is not on screen mw=%f mh=%f\n", mw, mh);
     return;
   }
-    
+
   if (gDirtyRectsEnabled) {
     //mRenderMatrix = context.getMatrix();
     mScreenCoordinates = getBoundingRectInScreenCoordinates();
@@ -1867,11 +1857,9 @@ rtDefineProperty(pxObject, y);
 rtDefineProperty(pxObject, w);
 rtDefineProperty(pxObject, h);
 
-rtDefineProperty(pxObject, vx);
-rtDefineProperty(pxObject, vy);
-rtDefineProperty(pxObject, ax);
-rtDefineProperty(pxObject, ay);
-rtDefineProperty(pxObject, phyCallback);
+#ifdef ENABLE_BASIC_PHYSICS
+rtDefineProperty(pxObject, physics);
+#endif
 
 rtDefineProperty(pxObject, px);
 rtDefineProperty(pxObject, py);
@@ -3213,7 +3201,7 @@ bool pxScene2d::bubbleEventOnBlur(rtObjectRef e, rtRef<pxObject> t, rtRef<pxObje
 bool pxScene2d::onMouseMove(int32_t x, int32_t y)
 {
   mPointerX= x;
-  mPointerY= y;  
+  mPointerY= y;
   #ifdef USE_SCENE_POINTER
   // JRJR this should be passing mouse cursor bounds in rather than dirty entire scene
   invalidateRect(NULL);
@@ -3362,8 +3350,8 @@ bool pxScene2d::onScrollWheel(float dx, float dy)
     e.set("target", mMouseEntered.getPtr());
     e.set("dx", dx);
     e.set("dy", dy);
-    
-    return bubbleEvent(e, mMouseEntered, "onPreScrollWheel", "onScrollWheel");    
+
+    return bubbleEvent(e, mMouseEntered, "onPreScrollWheel", "onScrollWheel");
   }
   return false;
 }

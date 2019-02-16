@@ -73,10 +73,10 @@
 #include "rtSettings.h"
 #ifdef RUNINMAIN
 #define ENTERSCENELOCK()
-#define EXITSCENELOCK() 
+#define EXITSCENELOCK()
 #else
 #define ENTERSCENELOCK() rtWrapperSceneUpdateEnter();
-#define EXITSCENELOCK() rtWrapperSceneUpdateExit(); 
+#define EXITSCENELOCK() rtWrapperSceneUpdateExit();
 class pxScriptView;
 class AsyncScriptInfo {
   public:
@@ -84,6 +84,12 @@ class AsyncScriptInfo {
     //pxIViewContainer * m_pWindow;
 };
 #endif
+
+//#define ENABLE_BASIC_PHYSICS
+#ifdef ENABLE_BASIC_PHYSICS
+#include "pxPhysics.h"
+#endif
+
 
 #define MAX_URL_SIZE 8000
 
@@ -108,13 +114,13 @@ rtError createObject2(const char* t, rtObjectRef& o);
 
 typedef void (*pxAnimationEnded)(void* ctx);
 
-struct pxAnimationTarget 
+struct pxAnimationTarget
 {
   char* prop;
   float to;
 };
 
-struct animation 
+struct animation
 {
   bool cancelled;
   bool flip;
@@ -129,7 +135,7 @@ struct animation
   double duration;
 
   pxConstantsAnimation::animationOptions  options;
-  
+
   pxInterp interpFunc;
 
   int32_t count;
@@ -140,10 +146,10 @@ struct animation
   rtObjectRef animateObj;
 };
 
-struct pxPoint2f 
+struct pxPoint2f
 {
   pxPoint2f():x(0),y(0) {}
-  pxPoint2f(float _x, float _y) { x = _x; y = _y; } 
+  pxPoint2f(float _x, float _y) { x = _x; y = _y; }
   float x, y;
 };
 
@@ -159,18 +165,18 @@ public:
   rtDeclareObject(pxObject, rtObject);
   rtReadOnlyProperty(_pxObject, _pxObject, voidPtr);
   rtProperty(parent, parent, setParent, rtObjectRef);
-  rtProperty(x, x, setX, float); 
+  rtProperty(x, x, setX, float);
   rtProperty(y, y, setY, float);
   rtProperty(w, w, setW, float);
   rtProperty(h, h, setH, float);
-  
-  // PHYSICS
-  rtProperty(vx, vx, setVX, float); // ## HUGH
-  rtProperty(vy, vy, setVY, float); // ## HUGH
-  rtProperty(ax, ax, setAX, float); // ## HUGH
-  rtProperty(ay, ay, setAY, float); // ## HUGH
-  //
-  
+
+#ifdef ENABLE_BASIC_PHYSICS
+
+  rtProperty(physics, physics, setPhysics, rtObjectRef);
+  mutable rtObjectRef mPhysics;
+
+#endif
+
   rtProperty(px, px, setPX, float);
   rtProperty(py, py, setPY, float);
   rtProperty(cx, cx, setCX, float);
@@ -191,7 +197,7 @@ public:
   rtProperty(mask, mask, setMask, bool);
   rtProperty(draw, drawEnabled, setDrawEnabled, bool);
   rtProperty(hitTest, hitTest, setHitTest, bool);
-  rtProperty(focus, focus, setFocus, bool); 
+  rtProperty(focus, focus, setFocus, bool);
   rtReadOnlyProperty(ready, ready, rtObjectRef);
 
   rtReadOnlyProperty(numChildren, numChildren, int32_t);
@@ -253,11 +259,11 @@ public:
 
   virtual ~pxObject() ;
 
-  
+
 
   // TODO missing conversions in rtValue between uint32_t and int32_t
   size_t numChildren() const { return mChildren.size(); }
-  rtError numChildren(int32_t& v) const 
+  rtError numChildren(int32_t& v) const
   {
     v = (int32_t) mChildren.size();
     return RT_OK;
@@ -272,7 +278,7 @@ public:
     {
       return RT_ERROR_INVALID_ARG;
     }
-    
+
     r = mChildren[i];
     return RT_OK;
   }
@@ -286,19 +292,19 @@ public:
     return mParent;
   }
 
-  rtError parent(rtObjectRef& v) const 
+  rtError parent(rtObjectRef& v) const
   {
     v = mParent;
     return RT_OK;
   }
 
-  rtError setParent(rtObjectRef parent) 
+  rtError setParent(rtObjectRef parent)
   {
     rtRef<pxObject> p;
 
     if (parent)
       p = (pxObject*)parent.get<voidPtr>("_pxObject");
-    
+
     setParent(p);
 
     return RT_OK;
@@ -306,7 +312,7 @@ public:
 
   rtError remove();
   rtError removeAll();
-  
+
   rtString id() { return mId; }
   rtError id(rtString& v) const { v = mId; return RT_OK; }
   rtError setId(const rtString& v) { mId = v; return RT_OK; }
@@ -327,32 +333,27 @@ public:
   rtError h(float& v)   const { v = mh; return RT_OK;   }
   virtual rtError setH(float v)       { cancelAnimation("h"); mh = v; return RT_OK;   }
 
-  //
-  //
-  //
-  rtError phyCallback(rtFunctionRef& v) const;
-  rtError setPhyCallback(const rtFunctionRef& v);
-  
-  rtProperty(phyCallback, phyCallback, setPhyCallback, rtFunctionRef);
+#ifdef ENABLE_BASIC_PHYSICS
 
-  float vx()             const { return mVx; }
-  rtError vx(float& v)   const {     v = mVx; return RT_OK;   }
-  virtual rtError setVX(float v) { mVx = v; mHavePHY = true; return RT_OK;   }
-  
-  float vy()             const { return mVy; }
-  rtError vy(float& v)   const {    v = mVy; return RT_OK;   }
-  virtual rtError setVY(float v) { mVy = v; mHavePHY = true; return RT_OK;   }
-  
-  float ax()             const { return mAx; }
-  rtError ax(float& v)   const {     v = mAx; return RT_OK;   }
-  virtual rtError setAX(float v) { mAx = v;   mHavePHY = true; return RT_OK;   }
+  rtObjectRef &physics() const
+  {
+    if(mPhysics.getPtr() == NULL)  {
+      mPhysics = new pxPhysics(); // LAZY init
+    }
+    return mPhysics;
+  }
+  rtError physics(rtObjectRef& r) const
+  {
+    if(mPhysics.getPtr() == NULL) {
+      mPhysics = new pxPhysics(); // LAZY init
+    }
+    r = mPhysics;
+    return RT_OK;
+  }
 
-  float ay()             const { return mAy; }
-  rtError ay(float& v)   const {    v = mAy; return RT_OK;   }
-  virtual rtError setAY(float v) { mAy = v;  mHavePHY = true; return RT_OK;   }
-  //
-  //
-  //
+  virtual rtError setPhysics(rtObjectRef v) { mPhysics = v; return RT_OK;  }
+
+#endif // ENABLE_BASIC_PHYSICS
 
   float px()            const { return mpx;}
   rtError px(float& v)  const { v = mpx; return RT_OK;  }
@@ -370,7 +371,7 @@ public:
   rtError sx(float& v)  const { v = msx; return RT_OK;  }
   virtual rtError setSX(float v)      { cancelAnimation("sx"); msx = v; return RT_OK;  }
   float sy()            const { return msy;}
-  rtError sy(float& v)  const { v = msx; return RT_OK;  } 
+  rtError sy(float& v)  const { v = msx; return RT_OK;  }
   virtual rtError setSY(float v)      { cancelAnimation("sy"); msy = v; return RT_OK;  }
   float a()             const { return ma; }
   rtError a(float& v)   const { v = ma; return RT_OK;   }
@@ -412,7 +413,7 @@ public:
   bool focus()            const { return mFocus;}
   rtError focus(bool& v)  const { v = mFocus; return RT_OK;  }
   rtError setFocus(bool v);
-  
+
   rtError ready(rtObjectRef& v) const
   {
     v = mReady;
@@ -429,17 +430,17 @@ public:
   void drawInternal(bool maskPass=false);
   virtual void draw() {}
   virtual void sendPromise();
- 
+
   bool hitTestInternal(pxMatrix4f m, pxPoint2f& pt, rtRef<pxObject>& hit, pxPoint2f& hitPt);
   virtual bool hitTest(pxPoint2f& pt);
 
   void setFocusInternal(bool focus) { mFocus = focus; }
-  
+
   rtError animateTo(const char* prop, double to, double duration,
                      uint32_t interp, uint32_t options,
                      int32_t count, rtObjectRef promise);
 
-  rtError animateToP2(rtObjectRef props, double duration, 
+  rtError animateToP2(rtObjectRef props, double duration,
                       uint32_t interp, uint32_t options,
                       int32_t count, rtObjectRef& promise);
 
@@ -494,13 +495,13 @@ public:
     i.set("sx",1);
     i.set("sy",1);
     i.set("r",0);
-#ifdef ANIMATION_ROTATE_XYZ    
+#ifdef ANIMATION_ROTATE_XYZ
     i.set("rx",0);
     i.set("ry",0);
     i.set("rz",1);
 #endif //ANIMATION_ROTATE_XYZ
     rtLogDebug("before initTransform\n");
-    t->initTransform(i, 
+    t->initTransform(i,
       "x cx + y cy + translateXY "
 #ifdef ANIMATION_ROTATE_XYZ
       "r rx ry rz rotateInDegreesXYZ "
@@ -516,19 +517,19 @@ public:
     {
 #if 1
       pxMatrix4f m;
-      
+
       d->set("x",100);
       d->set("y",100);
-      
+
       float v;
       d->get("x", v);
       d->get("cx", v);
-      
-      rtLogDebug("Before applyMatrix\n");    
+
+      rtLogDebug("Before applyMatrix\n");
       d->applyMatrix(m);
-      rtLogDebug("After applyMatrix\n");    
-     
-#endif 
+      rtLogDebug("After applyMatrix\n");
+
+#endif
       t->deleteData(d);
       rtLogDebug("After deleteData\n");
     }
@@ -540,16 +541,16 @@ public:
 #if 1
       float dx = -(mpx * mw);
       float dy = -(mpy * mh);
-      
+
       // translate based on xy rotate/scale based on cx, cy
       m.translate(mx + mcx + dx, my + mcy + dy);
-      
+
       if (mr)
       {
         m.rotateInDegrees(mr
 #ifdef ANIMATION_ROTATE_XYZ
         , mrx, mry, mrz
-#endif // ANIMATION_ROTATE_XYZ        
+#endif // ANIMATION_ROTATE_XYZ
         );
       }
       if (msx != 1.0 || msy != 1.0) m.scale(msx, msy);
@@ -561,7 +562,7 @@ public:
         m.rotateInDegrees(mr
 #ifdef ANIMATION_ROTATE_XYZ
         , mrx, mry, mrz
-#endif // ANIMATION_ROTATE_XYZ        
+#endif // ANIMATION_ROTATE_XYZ
         );
       }
       if (msx != 1.0 || msy != 1.0) m.scale(msx, msy);
@@ -577,7 +578,7 @@ public:
   static void getMatrixFromObjectToScene(pxObject* o, pxMatrix4f& m) {
 #if 1
     m.identity();
-    
+
     while(o)
     {
       pxMatrix4f m2;
@@ -585,12 +586,12 @@ public:
       m2.translate(j->mx+j->mcx, j->my+j->mcy);
       if (j->mr) {
         m2.rotateInDegrees(j->mr
-#ifdef ANIMATION_ROTATE_XYZ        
+#ifdef ANIMATION_ROTATE_XYZ
         , j->mrx, j->mry, j->mrz
-#endif //ANIMATION_ROTATE_XYZ        
+#endif //ANIMATION_ROTATE_XYZ
         );
       }
-      if (j->msx != 1.0 || j->msy != 1.0) m2.scale(j->msx, j->msy);  
+      if (j->msx != 1.0 || j->msy != 1.0) m2.scale(j->msx, j->msy);
       m2.translate(-j->mcx, -j->mcy);
 #else
       o->applyMatrix(m2);
@@ -605,33 +606,33 @@ public:
     m.invert();
 #endif
   }
-  
+
   static void getMatrixFromSceneToObject(pxObject* o, pxMatrix4f& m) {
 #if 0
     m.identity();
-    
+
     vector<rtRef<pxObject> > v;
     rtRef<pxObject> t = o;
-    
+
     while(t) {
       v.push_back(t);
       t = t->mParent;
     }
-    
-    for(vector<rtRef<pxObject> >::reverse_iterator it = v.rbegin(); it != v.rend(); ++it) 
+
+    for(vector<rtRef<pxObject> >::reverse_iterator it = v.rbegin(); it != v.rend(); ++it)
     {
       rtRef<pxObject>& j = *it;;
       pxMatrix4f m2;
       m2.translate(j->mx+j->mcx, j->my+j->mcy);
       if (j->mr) {
         m2.rotateInDegrees(j->mr
-#ifdef ANIMATION_ROTATE_XYZ        
+#ifdef ANIMATION_ROTATE_XYZ
         , j->mrx, j->mry, j->mrz
-#endif //ANIMATION_ROTATE_XYZ      
+#endif //ANIMATION_ROTATE_XYZ
         );
       }
-      
-      if (j->msx != 1.0 || j->msy != 1.0) m2.scale(j->msx, j->msy);  
+
+      if (j->msx != 1.0 || j->msy != 1.0) m2.scale(j->msx, j->msy);
       m2.translate(-j->mcx, -j->mcy);
       m2.invert();
       m2.multiply(m);
@@ -642,27 +643,27 @@ public:
     m.invert();
 #endif
   }
-  
+
   static void getMatrixFromObjectToObject(pxObject* from, pxObject* to, pxMatrix4f& m) {
     pxMatrix4f t;
     getMatrixFromObjectToScene(from, t);
     getMatrixFromSceneToObject(to, m);
-    
+
     m.multiply(t);
   }
-  
+
   static void transformPointFromObjectToScene(pxObject* o, const pxVector4f& from, pxVector4f& to) {
     pxMatrix4f m;
     getMatrixFromObjectToScene(o, m);
     to = m.multiply(from);
   }
-  
+
   static void transformPointFromSceneToObject(pxObject* o, const pxVector4f& from, pxVector4f& to) {
     pxMatrix4f m;
     getMatrixFromSceneToObject(o, m);
     to = m.multiply(from);
   }
-  
+
   static void transformPointFromObjectToObject(pxObject* fromObject, pxObject* toObject, pxVector4f& from, pxVector4f& to) {
     pxMatrix4f m;
     getMatrixFromObjectToObject(fromObject, toObject, m);
@@ -670,25 +671,25 @@ public:
   }
 
   rtError emit(rtFunctionRef& v) const { v = mEmit; return RT_OK; }
-  
+
   static pxObject* getObjectById(const char* id, pxObject* from)
   {
     if(id == NULL || from == NULL)
     {
       return NULL; // bad args
     }
-    
+
     // TODO fix rtString empty check
     if (from->mId.cString() && !strcmp(id, from->mId.cString()))
       return from;
-    
+
     for(std::vector<rtRef<pxObject> >::iterator it = from->mChildren.begin(); it != from->mChildren.end(); ++it)
     {
       pxObject* o = getObjectById(id, (*it).getPtr());
       if (o)
         return o;
     }
-    
+
     return NULL;
   }
 
@@ -758,7 +759,7 @@ public:
   rtEmitRef mEmit;
 
 protected:
-  // TODO getting freaking huge... 
+  // TODO getting freaking huge...
 //  rtRef<pxObject> mParent;
   pxObject* mParent;
   std::vector<rtRef<pxObject> > mChildren;
@@ -771,9 +772,9 @@ protected:
 
   bool  mHavePHY;
   float mVx, mVy, mAx, mAy;
-  
+
   rtFunctionRef mPhyCallback;
-  
+
   bool mInteractive;
   pxContextFramebufferRef mSnapshotRef;
   bool mPainting;
@@ -806,7 +807,7 @@ protected:
 
   pxScene2d* mScene;
 
-  std::vector<animation> mAnimations;  
+  std::vector<animation> mAnimations;
   pxContextFramebufferRef mDrawableSnapshotForMask;
   pxContextFramebufferRef mMaskSnapshot;
   bool mIsDisposed;
@@ -883,7 +884,7 @@ public:
   virtual void* getInterface(const char* /*name*/)
   {
     return NULL;
-  }  
+  }
 
 #if 0
   rtError url(rtString& v) const { v = mUri; return RT_OK; }
@@ -891,21 +892,21 @@ public:
 #endif
 
   rtError w(float& v) const { v = mw; return RT_OK; }
-  rtError setW(float v) 
-  { 
-    mw = v; 
+  rtError setW(float v)
+  {
+    mw = v;
     if (mView)
-      mView->onSize(static_cast<int32_t>(mw),static_cast<int32_t>(mh)); 
-    return RT_OK; 
+      mView->onSize(static_cast<int32_t>(mw),static_cast<int32_t>(mh));
+    return RT_OK;
   }
-  
+
   rtError h(float& v) const { v = mh; return RT_OK; }
-  rtError setH(float v) 
-  { 
-    mh = v; 
+  rtError setH(float v)
+  {
+    mh = v;
     if (mView)
-      mView->onSize(static_cast<int32_t>(mw),static_cast<int32_t>(mh)); 
-    return RT_OK; 
+      mView->onSize(static_cast<int32_t>(mw),static_cast<int32_t>(mh));
+    return RT_OK;
   }
 
   rtError onMouseDown(rtObjectRef o)
@@ -1058,13 +1059,13 @@ public:
     pxObject::update(t, dt);
   }
 
-  virtual void draw() 
+  virtual void draw()
   {
     if (mView)
       mView->onDraw();
   }
 
-  
+
 
 protected:
   pxViewRef mView;
@@ -1087,7 +1088,7 @@ public:
   rtProperty(serviceContext, serviceContext, setServiceContext, rtObjectRef);
 
 //  rtMethod1ArgAndNoReturn("makeReady", makeReady, bool);  // DEPRECATED ?
-  
+
   pxSceneContainer(pxScene2d* scene):pxViewContainer(scene){  pxSceneContainerCount++;}
   virtual ~pxSceneContainer() {rtLogDebug("###############~pxSceneContainer\n");pxSceneContainerCount--;}
 
@@ -1106,7 +1107,7 @@ public:
 
   rtError api(rtValue& v) const;
   rtError ready(rtObjectRef& o) const;
-  
+
   rtError serviceContext(rtObjectRef& o) const { o = mServiceContext; return RT_OK;}
   rtError setServiceContext(rtObjectRef o);
 
@@ -1118,16 +1119,16 @@ public:
 
 //  rtError makeReady(bool ready);  // DEPRECATED ?
 
-  // in the case of pxSceneContainer, the makeReady should be the  
-  // catalyst for ready to fire, so override sendPromise  
-  // to prevent firing from update() 
+  // in the case of pxSceneContainer, the makeReady should be the
+  // catalyst for ready to fire, so override sendPromise
+  // to prevent firing from update()
   virtual void sendPromise() { /*rtLogDebug("pxSceneContainer ignoring sendPromise\n");*/ }
 
   virtual void* getInterface(const char* name);
   virtual void releaseData(bool sceneSuspended);
   virtual void reloadData(bool sceneSuspended);
   virtual uint64_t textureMemoryUsage();
-  
+
 private:
   rtRef<pxScriptView> mScriptView;
   rtString mUrl;
@@ -1182,13 +1183,13 @@ public:
     mScene = NULL;
   }
 
-  virtual unsigned long AddRef() 
+  virtual unsigned long AddRef()
   {
     //rtLogInfo(__FUNCTION__);
     return rtAtomicInc(&mRefCount);
   }
-  
-  virtual unsigned long Release() 
+
+  virtual unsigned long Release()
   {
     //rtLogInfo(__FUNCTION__);
     long l = rtAtomicDec(&mRefCount);
@@ -1211,7 +1212,7 @@ public:
   {
     if (!mReady)
       return RT_FAIL;
-    
+
     o = mReady;
     return RT_OK;
   }
@@ -1237,7 +1238,7 @@ public:
   rtError suspend(const rtValue& v, bool& b);
   rtError resume(const rtValue& v, bool& b);
   rtError textureMemoryUsage(rtValue& v);
-  
+
 protected:
 
   static rtError printFunc(int /*numArgs*/, const rtValue* /*args*/, rtValue* result, void* ctx);
@@ -1290,7 +1291,7 @@ protected:
       return mView->onScrollWheel(dx,dy);
     return false;
   }
-  
+
   virtual bool onMouseEnter()
   {
     if (mView)
@@ -1393,7 +1394,7 @@ public:
   rtProperty(showDirtyRect, showDirtyRect, setShowDirtyRect, bool);
   rtProperty(enableDirtyRect, enableDirtyRect, setEnableDirtyRect, bool);
   rtProperty(customAnimator, customAnimator, setCustomAnimator, rtFunctionRef);
-  rtMethod1ArgAndReturn("loadArchive",loadArchive,rtString,rtObjectRef); 
+  rtMethod1ArgAndReturn("loadArchive",loadArchive,rtString,rtObjectRef);
   rtMethod1ArgAndReturn("create", create, rtObjectRef, rtObjectRef);
   rtMethodNoArgAndReturn("clock", clock, double);
   rtMethodNoArgAndNoReturn("logDebugMetrics", logDebugMetrics);
@@ -1417,10 +1418,10 @@ public:
   // focus is now a bool property on pxObject
   //rtMethod1ArgAndNoReturn("setFocus", setFocus, rtObjectRef);
   rtMethodNoArgAndReturn("getFocus", getFocus, rtObjectRef);
-  
-  
+
+
 //  rtMethodNoArgAndNoReturn("stopPropagation",stopPropagation);
-  
+
   rtMethod1ArgAndReturn("screenshot", screenshot, rtString, rtString);
 
   rtMethod1ArgAndReturn("clipboardGet", clipboardGet, rtString, rtString);
@@ -1429,8 +1430,8 @@ public:
   rtMethod1ArgAndReturn("getService", getService, rtString, rtObjectRef);
 
   rtMethodNoArgAndReturn("getAvailableApplications", getAvailableApplications, rtString);
-    
-    
+
+
   rtProperty(ctx, ctx, setCtx, rtValue);
   rtProperty(api, api, setAPI, rtValue);
 //  rtReadOnlyProperty(emit, emit, rtFunctionRef);
@@ -1469,13 +1470,13 @@ public:
     }
     mArchiveSet = false;
   }
-  
-  virtual unsigned long AddRef() 
+
+  virtual unsigned long AddRef()
   {
     return rtAtomicInc(&mRefCount);
   }
-  
-  virtual unsigned long Release() 
+
+  virtual unsigned long Release()
   {
     long l = rtAtomicDec(&mRefCount);
     //  rtLogDebug("pxScene2d release %ld\n",l);
@@ -1523,7 +1524,7 @@ public:
 
   rtError enableDirtyRect(bool& v) const;
   rtError setEnableDirtyRect(bool v);
-    
+
   rtError customAnimator(rtFunctionRef& f) const;
   rtError setCustomAnimator(const rtFunctionRef& f);
 
@@ -1540,7 +1541,7 @@ public:
   rtError createImage9Border(rtObjectRef p, rtObjectRef& o);
   rtError createImageResource(rtObjectRef p, rtObjectRef& o);
   rtError createImageAResource(rtObjectRef p, rtObjectRef& o);
-  rtError createFontResource(rtObjectRef p, rtObjectRef& o);  
+  rtError createFontResource(rtObjectRef p, rtObjectRef& o);
   rtError createScene(rtObjectRef p,rtObjectRef& o);
   rtError createExternal(rtObjectRef p, rtObjectRef& o);
   rtError createWayland(rtObjectRef p, rtObjectRef& o);
@@ -1570,7 +1571,7 @@ public:
   }
 
   rtError setFocus(rtObjectRef o);
- 
+
 #if 0
   rtError stopPropagation()
   {
@@ -1587,11 +1588,11 @@ public:
   rtError setAPI(const rtValue& v) { mAPI = v; return RT_OK; }
 
   rtError emit(rtFunctionRef& v) const { v = mEmit; return RT_OK; }
-  
+
   rtError animation(rtObjectRef& v) const {v = CONSTANTS.animationConstants; return RT_OK;}
   rtError stretch(rtObjectRef& v)   const {v = CONSTANTS.stretchConstants;   return RT_OK;}
-  rtError maskOp(rtObjectRef& v)    const {v = CONSTANTS.maskOpConstants;    return RT_OK;}  
-  
+  rtError maskOp(rtObjectRef& v)    const {v = CONSTANTS.maskOpConstants;    return RT_OK;}
+
   rtError alignVertical(rtObjectRef& v)   const {v = CONSTANTS.alignVerticalConstants;   return RT_OK;}
   rtError alignHorizontal(rtObjectRef& v) const {v = CONSTANTS.alignHorizontalConstants; return RT_OK;}
   rtError truncation(rtObjectRef& v)      const {v = CONSTANTS.truncationConstants;      return RT_OK;}
@@ -1625,7 +1626,7 @@ public:
   virtual bool onKeyDown(uint32_t keycode, uint32_t flags);
   virtual bool onKeyUp(uint32_t keycode, uint32_t flags);
   virtual bool onChar(uint32_t codepoint);
-  
+
   virtual void onUpdate(double t);
   virtual void onDraw();
   virtual void onComplete();
@@ -1633,25 +1634,25 @@ public:
   virtual void setViewContainer(pxIViewContainer* l);
   pxIViewContainer* viewContainer();
   void invalidateRect(pxRect* r);
-  
+
   void getMatrixFromObjectToScene(pxObject* o, pxMatrix4f& m);
   void getMatrixFromSceneToObject(pxObject* o, pxMatrix4f& m);
   void getMatrixFromObjectToObject(pxObject* from, pxObject* to, pxMatrix4f& m);
-  void transformPointFromObjectToScene(pxObject* o, const pxPoint2f& from, 
+  void transformPointFromObjectToScene(pxObject* o, const pxPoint2f& from,
 				       pxPoint2f& to);
   void transformPointFromSceneToObject(pxObject* o, const pxPoint2f& from, pxPoint2f& to);
   void transformPointFromObjectToObject(pxObject* fromObject, pxObject* toObject,
 					pxPoint2f& from, pxPoint2f& to);
-  
+
   void hitTest(pxPoint2f p, std::vector<rtRef<pxObject> > hitList);
-  
+
   pxObject* getRoot() const;
-  rtError root(rtObjectRef& v) const 
+  rtError root(rtObjectRef& v) const
   {
     v = getRoot();
     return RT_OK;
   }
- 
+
   rtObjectRef  getInfo() const;
   rtError info(rtObjectRef& v) const
   {
@@ -1734,9 +1735,9 @@ public:
   }
 
 private:
-  bool bubbleEvent(rtObjectRef e, rtRef<pxObject> t, 
+  bool bubbleEvent(rtObjectRef e, rtRef<pxObject> t,
                    const char* preEvent, const char* event) ;
-  
+
   bool bubbleEventOnBlur(rtObjectRef e, rtRef<pxObject> t, rtRef<pxObject> o);
 
   void draw();
@@ -1819,7 +1820,7 @@ class pxScene2dRef: public rtRef<pxScene2d>, public rtObjectBase
 
   // operator= is not inherited
   pxScene2dRef& operator=(pxScene2d* s) { asn(s); return *this; }
-  
+
  private:
   virtual rtError Get(const char* name, rtValue* value) const override;
   virtual rtError Get(uint32_t i, rtValue* value) const override;
