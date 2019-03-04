@@ -11,6 +11,8 @@
 
 #import <Cocoa/Cocoa.h>
 
+#import <QuartzCore/QuartzCore.h>
+
 //
 // NOTE:   'PX_OPENGL' *and* 'GLGL' are needed for *pxScene2d* builds for OpenGL
 //
@@ -1195,6 +1197,46 @@ void pxWindow::setVisibility(bool visible)
     [window orderOut:nil];
 }
 
+//#define USE_GCD_TIMER
+#ifdef USE_GCD_TIMER
+  dispatch_source_t     _timer;
+#endif
+
+//#define USE_DISPLAY_LINK
+#ifdef USE_DISPLAY_LINK
+
+BOOL flip = YES;  // half rate experiment
+
+dispatch_source_t _displaySource;
+
+CVDisplayLinkRef    displayLink;
+CGDirectDisplayID   displayID = CGMainDisplayID();
+CVReturn            error = kCVReturnSuccess;
+
+static CVReturn renderCallback(CVDisplayLinkRef displayLink,
+                               const CVTimeStamp *inNow,
+                               const CVTimeStamp *inOutputTime,
+                               CVOptionFlags flagsIn,
+                               CVOptionFlags *flagsOut,
+                               void *displayLinkContext)
+{
+  
+//  flip = !flip;
+//  
+//  if(flip) return 0;
+  // return [(__bridge SPVideoView *)displayLinkContext renderTime:inOutputTime];
+ 
+ /// pxWindowNative::_helper_onAnimationTimer( (pxWindowNative*) displayLinkContext);
+
+  /*__weak*/ dispatch_source_t source = (__bridge dispatch_source_t)displayLinkContext;
+  dispatch_source_merge_data(source, 1);
+  return kCVReturnSuccess;
+  
+  return 0;
+}
+
+#endif
+
 pxError pxWindow::setAnimationFPS(uint32_t fps)
 {
   NSWindow* window = (NSWindow*)mWindow;
@@ -1208,11 +1250,72 @@ pxError pxWindow::setAnimationFPS(uint32_t fps)
   
   if (fps > 0)
   {
-    NSTimer* t = [NSTimer timerWithTimeInterval:1.0/fps target: [window contentView] selector: @selector(fireAnimationTimer:) userInfo:NULL repeats:YES];
+#ifdef USE_GCD_TIMER
+
+    double timeout = 1.0/fps;
+    
+    //    dispatch_queue_t queue = dispatch_get_global_queue( DISPATCH_QUEUE_PRIORITY_DEFAULT, 0);
+    dispatch_queue_t queue = dispatch_get_main_queue(); // MAIN THREAD
+    
+    // create our timer source
+    _timer = dispatch_source_create( DISPATCH_SOURCE_TYPE_TIMER, 0, 0, queue);
+    
+    // set the time to fire (we're only going to fire once,
+    // so just fill in the initial time).
+    dispatch_source_set_timer(_timer,
+                              dispatch_time(DISPATCH_TIME_NOW, timeout * NSEC_PER_SEC),
+                              timeout * 1000000000.0, // seconds to nanoseconds   //DISPATCH_TIME_FOREVER,
+                              0);
+    
+    // Hey, let's actually do something when the timer fires!
+    dispatch_source_set_event_handler(_timer, ^
+                                      {
+                                        
+                                        pxWindowNative::_helper_onAnimationTimer( (pxWindowNative*) this);
+                                        
+                                        // ensure we never fire again
+                                        // dispatch_source_cancel(_timer);
+                                      });
+    
+    // now that our timer is all set to go, start it
+    dispatch_resume(_timer);
+#endif
+    
+#ifdef USE_DISPLAY_LINK
+    _displaySource = dispatch_source_create(DISPATCH_SOURCE_TYPE_DATA_ADD, 0, 0, dispatch_get_main_queue());
+    __block pxWindow* weakSelf = this;
+    dispatch_source_set_event_handler(_displaySource, ^(){
+//      [weakSelf fireAnimationTimer];
+      
+       pxWindowNative::_helper_onAnimationTimer(weakSelf);
+     // pxWindowNative::_helper_onAnimationTimer( (pxWindowNative*) displayLinkContext);
+    });
+    dispatch_resume(_displaySource);
+    
+    error = CVDisplayLinkCreateWithCGDisplay(displayID, &displayLink);
+    if (error)
+    {
+      NSLog(@"DisplayLink created with error:%d", error);
+      displayLink = NULL;
+    }
+    CVDisplayLinkSetOutputCallback(displayLink, renderCallback, (__bridge void*)_displaySource);
+    
+    CVDisplayLinkStart(displayLink); // START
+#else
+    
+    NSTimer* t = [NSTimer timerWithTimeInterval:1.0/fps
+                                         target: [window contentView]
+                                       selector: @selector(fireAnimationTimer:)
+                                       userInfo: NULL
+                                        repeats: YES];
+    
     // Install it ourselves so that it runs during window resize etc... 
     [[NSRunLoop currentRunLoop] addTimer:t forMode:NSDefaultRunLoopMode];
     [[NSRunLoop currentRunLoop] addTimer:t forMode:NSEventTrackingRunLoopMode];
     mTimer = (void*)t;
+    
+#endif //USE_GCD_TIMER
+    
   }
   return PX_OK;
 }
